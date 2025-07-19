@@ -12,3 +12,16 @@ Duy trì ý nghĩa cốt lõi và các sự kiện của văn bản gốc, nhưn
 Sử dụng từ vựng tiếng Việt phong phú, các phép ẩn dụ và so sánh đặc trưng của thể loại ngôn tình.
 Đảm bảo đầu ra là tiếng Việt tự nhiên, không phải là một bản dịch máy cứng nhắc.
 Đầu ra CHỈ nên là câu chuyện tiếng Việt đã được dịch, không có bất kỳ cụm từ giới thiệu hay kết luận nào từ bạn.`;
+
+export const DEFAULT_CHAPTER_TITLE_PROMPT_TEMPLATE = `Bạn là một biên tập viên tài năng, chuyên đặt những tiêu đề chương lôi cuốn cho tiểu thuyết ngôn tình.
+Nhiệm vụ của bạn là đọc đoạn văn bản đã được dịch dưới đây và tạo ra một tiêu đề chương ngắn gọn, gợi mở và lãng mạn.
+Tiêu đề nên có độ dài khoảng {{maxWords}} từ.
+CHỈ trả về duy nhất chuỗi tiêu đề đã được tạo, không có bất kỳ văn bản nào khác.
+
+---
+**Nội dung chương (tiếng Việt):**
+{{narrativeText}}
+---
+
+**Tiêu đề chương (khoảng {{maxWords}} từ):**
+`;

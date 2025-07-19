@@ -10,7 +10,6 @@ interface NovelTocModalProps {
   isLoading: boolean; // Combined loading state (isFetchingNovelToc || isExtractingLink)
   error: string | null;
   currentTocUrl: string; 
-  configuredNovelTocItemClass: string;
 }
 
 export const NovelTocModal: React.FC<NovelTocModalProps> = ({
@@ -21,7 +20,6 @@ export const NovelTocModal: React.FC<NovelTocModalProps> = ({
   isLoading,
   error,
   currentTocUrl,
-  configuredNovelTocItemClass
 }) => {
   if (!isOpen) {
     return null;
@@ -81,8 +79,8 @@ export const NovelTocModal: React.FC<NovelTocModalProps> = ({
               <p className="font-semibold">Could not load chapters:</p>
               <p className="text-sm whitespace-pre-line">{error}</p> 
               <p className="text-sm mt-2">
-                The app attempted to find chapter links using HTML class "<code>{configuredNovelTocItemClass}</code>".
-                Please ensure the URL is correct, the page structure matches this expected format (or configure the class name in "Advanced Content Features"), and there are no CORS issues.
+                The app attempted to find chapter links inside an element with ID "<code>chapterList</code>".
+                Please ensure the URL is correct, the page structure matches this expected format, and there are no CORS issues.
               </p>
             </div>
           )}
@@ -103,7 +101,7 @@ export const NovelTocModal: React.FC<NovelTocModalProps> = ({
           )}
            {!isLoading && !error && (!chapters || chapters.length === 0) && ( 
              <div className="flex justify-center items-center h-32">
-                <p className="text-gray-500">No chapters found. This might mean the configured class "<code>{configuredNovelTocItemClass}</code>" didn't yield any valid chapter links, or the page structure is different.</p>
+                <p className="text-gray-500">No chapters found. This might mean the element with ID "<code>chapterList</code>" didn't yield any valid chapter links, or the page structure is different.</p>
              </div>
            )}
         </main>

@@ -44,31 +44,27 @@ const ai = new GoogleGenAI({ apiKey: apiKeyFromVite });
 export const transformTextViaGemini = async (
   modelName: string,
   systemInstruction: string,
-  inputText: string, // Changed from rawVietnameseText for clarity
+  inputText: string,
   temperature: number,
   topP: number,
   topK: number,
-  seed?: number // Seed is now always a number if provided by App.tsx
+  seed: number,
+  translationContext?: string
 ): Promise<string> => {
 
   const modelConfig: Record<string, any> = {
     temperature: temperature,
     topP: topP,
     topK: topK,
+    seed: seed
   };
-
-  // No longer using systemInstruction in the config. It will be part of the main prompt.
-  // if (systemInstruction && systemInstruction.trim() !== '') {
-  //   modelConfig.systemInstruction = systemInstruction;
-  // }
-
-  if (seed !== undefined) { // Seed will always be a number if it comes from App.tsx logic
-    modelConfig.seed = seed;
-  }
   
-  // Construct a more explicit prompt to guide the model better.
-  // This combines the instruction and the input text, clearly labeling each part.
-  const fullPrompt = `${systemInstruction}
+  let contextInstruction = '';
+  if (translationContext && translationContext.trim() !== '') {
+    contextInstruction = `Dưới đây là một số hướng dẫn về ngữ cảnh và thuật ngữ từ các chương trước. Hãy tuân thủ chặt chẽ các hướng dẫn này để đảm bảo tính nhất quán:\n<context>\n${translationContext}\n</context>\n\n`;
+  }
+
+  const fullPrompt = `${contextInstruction}${systemInstruction}
 
 ---
 **Văn bản gốc (tiếng Trung):**
@@ -77,16 +73,15 @@ ${inputText}
 **Bản dịch (tiếng Việt):**
 `;
 
-
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: modelName,
-      contents: fullPrompt, // Use the new, combined and more explicit prompt
+      contents: fullPrompt,
       config: modelConfig
     });
     
     const text = response.text;
-    if (text === null || text === undefined || text.trim() === "") { // Check for null, undefined, or empty/whitespace-only string
+    if (text === null || text === undefined || text.trim() === "") {
       throw new Error("Received an empty or invalid response from the AI. This could be due to: \n1. Overly restrictive or conflicting 'System Instruction'. \n2. Overly restrictive model parameters (e.g., Temperature near 0 with very low Top-K). \n3. The input text itself being problematic for the current configuration. \n4. Content being blocked by safety filters without a specific finishReason. \nPlease check these settings or try resetting to defaults.");
     }
     return text.trim();
@@ -155,5 +150,60 @@ Tiêu đề dịch (tiếng Việt):`;
         }
     }
     throw new Error(errorMessage);
+  }
+};
+
+export const updateContextViaGemini = async (
+  modelName: string,
+  existingContext: string,
+  chineseText: string,
+  vietnameseTranslation: string
+): Promise<string> => {
+  const prompt = `Bạn là một trợ lý phân tích, có nhiệm vụ duy trì một danh sách thuật ngữ nhất quán cho dịch giả.
+Dựa trên "Bối cảnh hiện tại", "Văn bản gốc mới" và "Bản dịch mới", hãy tạo ra một "Bối cảnh cập nhật".
+
+QUY TẮC:
+1. "Bối cảnh cập nhật" phải là một danh sách các thuật ngữ quan trọng (tên riêng, địa danh, xưng hô, cụm từ đặc biệt) và cách dịch nhất quán của chúng.
+2. Kết hợp thông tin từ bối cảnh cũ và bổ sung các thuật ngữ mới từ văn bản mới. Nếu có mâu thuẫn, ưu tiên cách dịch trong "Bản dịch mới".
+3. Giữ cho bối cảnh ngắn gọn, ở dạng "Thuật ngữ gốc -> Bản dịch".
+4. Nếu "Bối cảnh hiện tại" trống, hãy tạo một bối cảnh mới từ đầu.
+5. CHỈ trả về nội dung của "Bối cảnh cập nhật", không có bất kỳ lời giải thích hay tiêu đề nào.
+
+---
+**Bối cảnh hiện tại:**
+${existingContext || '(trống)'}
+
+---
+**Văn bản gốc mới (tiếng Trung):**
+${chineseText}
+
+---
+**Bản dịch mới (tiếng Việt):**
+${vietnameseTranslation}
+
+---
+**Bối cảnh cập nhật:**
+`;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: prompt,
+      config: { temperature: 0.1 } // Low temp for factual, consistent output
+    });
+    const text = response.text;
+     if (text === null || text === undefined) {
+      throw new Error("Received a null or undefined response from the AI for context update.");
+    }
+    return text.trim();
+  } catch(error) {
+     console.error("Error calling Gemini API for context update:", error);
+     let errorMessage = "An unknown error occurred while updating context.";
+      if (error instanceof Error) {
+        errorMessage = `Gemini API Error (Context Update): ${error.message}.`;
+      }
+      // Don't throw, just return existing context to not break the flow
+      console.error(errorMessage);
+      return existingContext; // Return old context on failure
   }
 };

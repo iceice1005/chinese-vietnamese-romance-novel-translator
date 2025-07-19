@@ -120,6 +120,13 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ entry, onDelete }) => 
             </div>
           )}
 
+          {entry.translationContext && (
+            <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
+              <h4 className="font-semibold text-orange-800 mb-2 text-sm">Translation Context Used:</h4>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap">{entry.translationContext}</p>
+            </div>
+          )}
+
           <div>
             <div className="flex justify-between items-center mb-1">
               <h4 className="font-semibold text-gray-600">Original Text:</h4>

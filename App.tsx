@@ -8,8 +8,8 @@ import { ModelConfigurator } from './components/ModelConfigurator';
 import { PromptEditor } from './components/PromptEditor';
 import { FetchNovelTocFeature } from './components/FetchNovelTocFeature';
 import { NovelTocModal } from './components/NovelTocModal';
-import { transformTextViaGemini, translateTitleViaGemini } from './services/geminiService';
-import { extractTruyenWikiDichNetBookIndexUrl } from './services/urlExtractorService'; // New import
+import { transformTextViaGemini, translateTitleViaGemini, updateContextViaGemini } from './services/geminiService';
+import { extractTruyenWikiDichNetBookIndexUrl } from './services/urlExtractorService';
 import { TransformationEntry, NovelChapter } from './types';
 import { IndeterminateProgressBar } from './components/IndeterminateProgressBar';
 import { Modal } from './components/Modal';
@@ -36,13 +36,97 @@ const infoComponentMap: Record<InfoComponentKey, React.FC> = {
   modelSelection: ModelSelectionInfo,
 };
 
+// Define ContextManager Component within App.tsx to avoid creating new files
+interface ContextManagerProps {
+  isContextEnabled: boolean;
+  setIsContextEnabled: (value: boolean) => void;
+  translationContext: string;
+  setTranslationContext: (value: string) => void;
+  contextChainLength: number;
+  onClearContext: () => void;
+  isLoading: boolean;
+  isUpdatingContext: boolean;
+}
+
+const ContextManager: React.FC<ContextManagerProps> = ({
+  isContextEnabled,
+  setIsContextEnabled,
+  translationContext,
+  setTranslationContext,
+  contextChainLength,
+  onClearContext,
+  isLoading,
+  isUpdatingContext,
+}) => {
+  const isFeatureDisabled = !isContextEnabled || isLoading;
+
+  return (
+    <div className="w-full p-6 bg-white shadow-xl rounded-lg border border-orange-300">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-semibold text-orange-700" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+          Translation Context
+        </h3>
+        <label htmlFor="context-enabled-toggle" className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            id="context-enabled-toggle"
+            className="sr-only peer"
+            checked={isContextEnabled}
+            onChange={(e) => setIsContextEnabled(e.target.checked)}
+            disabled={isLoading}
+          />
+          <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-orange-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+          <span className="ml-3 text-sm font-medium text-gray-900">{isContextEnabled ? 'Enabled' : 'Disabled'}</span>
+        </label>
+      </div>
+      <p className="text-xs text-gray-500 mb-3" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+        Maintain consistency for names and terms. The context is updated and carried over after each translation.
+      </p>
+      
+      <textarea
+        value={translationContext}
+        onChange={(e) => setTranslationContext(e.target.value)}
+        placeholder={isContextEnabled ? "Context will be generated here. You can also manually edit it..." : "Enable the feature to start using context."}
+        className="w-full h-32 p-3 border border-orange-400 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-y placeholder-gray-400 text-gray-700 bg-orange-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+        disabled={isFeatureDisabled}
+        aria-label="Translation context editor"
+        style={{ fontFamily: "'Times New Roman', Times, serif" }}
+      />
+      
+      <div className="mt-3 flex justify-between items-center">
+        <div className="text-sm text-gray-600">
+          {isUpdatingContext ? (
+            <span className="flex items-center text-orange-600">
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Updating context...
+            </span>
+          ) : (
+             <span>Contributions to context: <strong>{contextChainLength}</strong></span>
+          )}
+        </div>
+        <button
+          onClick={onClearContext}
+          disabled={isFeatureDisabled || !translationContext}
+          className="px-4 py-1.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          style={{ fontFamily: "'Times New Roman', Times, serif" }}
+        >
+          Clear Context
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const [systemInstruction, setSystemInstruction] = useState<string>(DEFAULT_SYSTEM_INSTRUCTION);
   const [inputText, setInputText] = useState<string>('');
   const [outputText, setOutputText] = useState<string>('');
   const [translatedTitle, setTranslatedTitle] = useState<string | null>(null);
   const [history, setHistory] = useState<TransformationEntry[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false); // Main app loading (Gemini transformation)
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [lastTransformationDuration, setLastTransformationDuration] = useState<number | null>(null);
 
@@ -54,6 +138,13 @@ const App: React.FC = () => {
 
   const [isOptionalSettingsOpen, setIsOptionalSettingsOpen] = useState<boolean>(false);
   const [isTocFeatureOpen, setIsTocFeatureOpen] = useState<boolean>(false); 
+  const [isContextSectionOpen, setIsContextSectionOpen] = useState<boolean>(false);
+
+  // Context Feature State
+  const [isContextEnabled, setIsContextEnabled] = useState<boolean>(false);
+  const [translationContext, setTranslationContext] = useState<string>('');
+  const [contextChainLength, setContextChainLength] = useState<number>(0);
+  const [isUpdatingContext, setIsUpdatingContext] = useState<boolean>(false);
 
   // Modal State for Info
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
@@ -64,8 +155,8 @@ const App: React.FC = () => {
 
   // States for Fetch Novel TOC Feature
   const [novelTocUrlInput, setNovelTocUrlInput] = useState<string>('');
-  const [isExtractingLink, setIsExtractingLink] = useState<boolean>(false); // New state for URL extraction phase
-  const [isFetchingNovelToc, setIsFetchingNovelToc] = useState<boolean>(false); // For ToC fetching phase
+  const [isExtractingLink, setIsExtractingLink] = useState<boolean>(false);
+  const [isFetchingNovelToc, setIsFetchingNovelToc] = useState<boolean>(false);
   const [fetchNovelTocError, setFetchNovelTocError] = useState<string | null>(null);
   const [novelChapters, setNovelChapters] = useState<NovelChapter[] | null>(null);
   const [isNovelTocModalOpen, setIsNovelTocModalOpen] = useState<boolean>(false);
@@ -73,9 +164,7 @@ const App: React.FC = () => {
   // State for InputArea's URL (lifted) and auto-fetch trigger
   const [inputAreaUrl, setInputAreaUrl] = useState<string>('');
   const [autoFetchUrlSignal, setAutoFetchUrlSignal] = useState<number>(0);
-  // States for titles fetched by InputArea, to be passed to onTransform
   const [fetchedPrimaryTitleForTransform, setFetchedPrimaryTitleForTransform] = useState<string | null>(null);
-
 
   const handleOpenInfoModal = useCallback(async (title: string, componentKey: InfoComponentKey) => {
     setInfoModalTitle(title);
@@ -117,6 +206,9 @@ const App: React.FC = () => {
       setError('System instruction cannot be empty.');
       return;
     }
+
+    const contextForThisRun = isContextEnabled ? translationContext : '';
+
     setIsLoading(true);
     setError(null);
     setOutputText('');
@@ -143,7 +235,6 @@ const App: React.FC = () => {
     let finalTranslatedTitle: string | undefined = undefined;
 
     try {
-      // Step 1: Translate the main narrative text
       transformedTextResult = await transformTextViaGemini(
         selectedModel,
         systemInstruction,
@@ -151,28 +242,25 @@ const App: React.FC = () => {
         temperature,
         topP,
         topK,
-        actualSeedUsed
+        actualSeedUsed,
+        contextForThisRun // Pass context to the service
       );
       const endTime = performance.now();
       const durationMs = endTime - startTime;
       setLastTransformationDuration(durationMs);
       setOutputText(transformedTextResult);
 
-      // Step 2: Translate the fetched title if it exists
       if (primaryTitle && primaryTitle.trim() !== '') {
         try {
           finalTranslatedTitle = await translateTitleViaGemini(selectedModel, primaryTitle);
           setTranslatedTitle(finalTranslatedTitle);
         } catch (titleError) {
            console.error('Title translation error:', titleError);
-           // Non-fatal error for the user, we can proceed without the translated title.
            setError('Could not translate the chapter title, but the main text was transformed.');
            finalTranslatedTitle = undefined;
         }
       }
       
-      // Step 3: Create history entry
-      const currentModelDetails = AVAILABLE_TEXT_MODELS.find(m => m.id === selectedModel);
       const newEntry: TransformationEntry = {
         id: Date.now().toString(),
         originalText: inputText,
@@ -180,15 +268,36 @@ const App: React.FC = () => {
         timestamp: new Date(),
         durationMs: durationMs,
         modelId: selectedModel,
-        modelName: currentModelDetails ? currentModelDetails.name : selectedModel,
+        modelName: AVAILABLE_TEXT_MODELS.find(m => m.id === selectedModel)?.name || selectedModel,
         temperature: temperature,
         topP: topP,
         topK: topK,
         seed: actualSeedUsed,
         primaryTitle: primaryTitle?.trim() ? primaryTitle.trim() : undefined,
-        secondaryTitle: finalTranslatedTitle, // Store the translated title here
+        secondaryTitle: finalTranslatedTitle,
+        translationContext: isContextEnabled ? contextForThisRun : undefined,
       };
       setHistory(prevHistory => [newEntry, ...prevHistory].slice(0, 10));
+
+      // After successful transformation, update context if enabled
+      if (isContextEnabled) {
+        setIsUpdatingContext(true);
+        try {
+          const newContext = await updateContextViaGemini(
+            selectedModel,
+            contextForThisRun,
+            inputText,
+            transformedTextResult
+          );
+          setTranslationContext(newContext);
+          setContextChainLength(prevLength => prevLength + 1);
+        } catch (contextError) {
+          console.error('Failed to update context:', contextError);
+          // Don't show a blocking error, just log it.
+        } finally {
+          setIsUpdatingContext(false);
+        }
+      }
 
     } catch (err) {
       console.error('Transformation error:', err);
@@ -199,7 +308,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedModel, systemInstruction, inputText, temperature, topP, topK, seed]);
+  }, [selectedModel, systemInstruction, inputText, temperature, topP, topK, seed, isContextEnabled, translationContext]);
 
   const handleDeleteHistoryItem = useCallback((id: string) => {
     setHistory(prevHistory => prevHistory.filter(entry => entry.id !== id));
@@ -213,13 +322,14 @@ const App: React.FC = () => {
     setSystemInstruction(DEFAULT_SYSTEM_INSTRUCTION);
   }, []);
 
-  const toggleOptionalSettings = () => {
-    setIsOptionalSettingsOpen(prev => !prev);
-  };
+  const handleClearContext = useCallback(() => {
+    setTranslationContext('');
+    setContextChainLength(0);
+  }, []);
 
-  const toggleTocFeature = () => {
-    setIsTocFeatureOpen(prev => !prev);
-  };
+  const toggleOptionalSettings = () => setIsOptionalSettingsOpen(prev => !prev);
+  const toggleTocFeature = () => setIsTocFeatureOpen(prev => !prev);
+  const toggleContextSection = () => setIsContextSectionOpen(prev => !prev);
 
   const handleFetchNovelToc = useCallback(async () => {
     if (!novelTocUrlInput.trim()) {
@@ -232,7 +342,6 @@ const App: React.FC = () => {
     
     let urlToFetch = novelTocUrlInput;
 
-    // Check if URL needs extraction
     try {
         const parsedUrl = new URL(novelTocUrlInput);
         if (parsedUrl.hostname === 'truyenwikidich.net' && parsedUrl.pathname.startsWith('/truyen/')) {
@@ -249,17 +358,14 @@ const App: React.FC = () => {
             setIsExtractingLink(false);
         }
     } catch (urlParseError) {
-        // Not a valid URL, or not a truyenwikidich URL that needs special handling.
-        // Proceed with original URL, error will be caught by fetch if invalid.
         console.warn('URL parsing for extraction check failed or not applicable:', urlParseError);
     }
     
     setIsFetchingNovelToc(true);
 
     try {
-      // Use a CORS proxy to fetch the content from the client-side
       const proxiedUrlToFetch = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlToFetch)}`;
-      const response = await fetch(proxiedUrlToFetch); // Use potentially extracted and proxied URL
+      const response = await fetch(proxiedUrlToFetch);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}. The fetch was proxied to avoid CORS issues, but the request still failed. The target site might be down or blocking the proxy.`);
@@ -288,7 +394,7 @@ const App: React.FC = () => {
           let href = anchor.getAttribute('href')!;
           
           try {
-            const absoluteUrl = new URL(href, urlToFetch).toString(); // Base absolute URL on the fetched URL (the original one, not proxied)
+            const absoluteUrl = new URL(href, urlToFetch).toString();
             chapters.push({ title, url: absoluteUrl });
           } catch (urlError) {
             console.warn(`Skipping invalid URL '${href}' for chapter '${title}':`, urlError);
@@ -320,7 +426,7 @@ const App: React.FC = () => {
       setFetchNovelTocError(errorMessage);
     } finally {
       setIsFetchingNovelToc(false);
-      setIsExtractingLink(false); // Ensure this is always reset
+      setIsExtractingLink(false);
     }
   }, [novelTocUrlInput]);
 
@@ -335,6 +441,7 @@ const App: React.FC = () => {
     setFetchedPrimaryTitleForTransform(primary);
   }, []);
 
+  const combinedIsLoading = isLoading || isFetchingNovelToc || isExtractingLink || isUpdatingContext;
 
   return (
     <>
@@ -365,7 +472,7 @@ const App: React.FC = () => {
                   systemInstruction={systemInstruction}
                   setSystemInstruction={setSystemInstruction}
                   onResetSystemInstruction={handleResetSystemInstruction}
-                  isLoading={isLoading}
+                  isLoading={combinedIsLoading}
                 />
                 <ModelConfigurator
                   selectedModel={selectedModel}
@@ -379,7 +486,7 @@ const App: React.FC = () => {
                   setTopK={setTopK}
                   seed={seed}
                   setSeed={setSeed}
-                  isLoading={isLoading}
+                  isLoading={combinedIsLoading}
                   onOpenInfoModal={handleOpenInfoModal}
                 />
               </div>
@@ -409,7 +516,7 @@ const App: React.FC = () => {
                   novelTocUrl={novelTocUrlInput}
                   setNovelTocUrl={setNovelTocUrlInput}
                   onFetchToc={handleFetchNovelToc}
-                  isLoadingApp={isLoading}
+                  isLoadingApp={combinedIsLoading}
                   isExtractingLink={isExtractingLink}
                   isFetchingToc={isFetchingNovelToc}
                   fetchError={fetchNovelTocError}
@@ -418,11 +525,44 @@ const App: React.FC = () => {
             )}
           </section>
 
+          <section className="w-full p-6 bg-white shadow-xl rounded-lg border border-orange-300">
+            <button
+              onClick={toggleContextSection}
+              className="w-full flex justify-between items-center text-left focus:outline-none py-2"
+              aria-expanded={isContextSectionOpen}
+              aria-controls="context-manager-content"
+            >
+              <h2 className="text-xl font-semibold text-orange-700" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+                Translation Context
+              </h2>
+              <span 
+                className="text-2xl text-gray-600 transition-transform duration-300 ease-in-out"
+                style={{ transform: isContextSectionOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              >
+                ▼
+              </span>
+            </button>
+            {isContextSectionOpen && (
+               <div id="context-manager-content" className="mt-6 space-y-6 border-t border-orange-200 pt-6 animate-fadeIn">
+                  <ContextManager
+                    isContextEnabled={isContextEnabled}
+                    setIsContextEnabled={setIsContextEnabled}
+                    translationContext={translationContext}
+                    setTranslationContext={setTranslationContext}
+                    contextChainLength={contextChainLength}
+                    onClearContext={handleClearContext}
+                    isLoading={combinedIsLoading}
+                    isUpdatingContext={isUpdatingContext}
+                  />
+               </div>
+            )}
+          </section>
+
           <InputArea
             inputText={inputText}
             setInputText={setInputText}
             onTransform={() => handleTransform(fetchedPrimaryTitleForTransform ?? undefined)}
-            isLoading={isLoading || isFetchingNovelToc || isExtractingLink}
+            isLoading={combinedIsLoading}
             urlInputValue={inputAreaUrl}
             onUrlInputChange={setInputAreaUrl}
             autoFetchSignal={autoFetchUrlSignal}
@@ -458,6 +598,21 @@ const App: React.FC = () => {
         </main>
         <footer className="w-full max-w-4xl text-center py-8 mt-auto text-sm text-gray-500" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
           <p>Powered by Gemini API</p>
+          <p className="mt-2 flex items-center justify-center text-lg">
+            Base on ideas of&nbsp;
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="currentColor" 
+              className="w-5 h-5 mr-1 inline-block text-pink-500"
+              aria-hidden="true"
+            >
+              <path fillRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clipRule="evenodd" />
+            </svg>
+            <span className="text-pink-600 hover:text-pink-700 hover:underline cursor-default">
+              <strong>Edit vì đam mê</strong>
+            </span>
+          </p>
         </footer>
       </div>
       <Modal
