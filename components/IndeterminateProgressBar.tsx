@@ -5,7 +5,7 @@ export const IndeterminateProgressBar: React.FC = () => {
   return (
     <div 
       className="w-full max-w-md h-3 bg-pink-300 rounded-full overflow-hidden relative animated-progress-bar"
-      aria-label="Transformation in progress"
+      aria-label="Translation in progress"
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100} 

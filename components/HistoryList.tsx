@@ -17,7 +17,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   if (history.length === 0) {
     return (
       <section className="w-full p-6 mt-8 text-center text-gray-500">
-        <p style={{ fontFamily: "'Times New Roman', Times, serif" }}>Your transformation history will appear here.</p>
+        <p style={{ fontFamily: "'Times New Roman', Times, serif" }}>Your translation history will appear here.</p>
       </section>
     );
   }
@@ -25,7 +25,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
   return (
     <section className="w-full mt-8">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-indigo-600" style={{ fontFamily: "'Times New Roman', Times, serif" }}>Transformation History</h2>
+        <h2 className="text-2xl font-semibold text-indigo-600" style={{ fontFamily: "'Times New Roman', Times, serif" }}>Translation History</h2>
         <button
           onClick={onClearAllHistory}
           disabled={history.length === 0}

@@ -13,6 +13,7 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ entry, onDelete }) => 
   const [isExpanded, setIsExpanded] = useState(false);
   const [originalCopyText, setOriginalCopyText] = useState('Copy Original');
   const [narrativeCopyText, setNarrativeCopyText] = useState('Copy Narrative');
+  const [contextCopyText, setContextCopyText] = useState('Copy Context');
 
   const formattedTimestamp = useMemo(() => 
     new Date(entry.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short', hour12: true })
@@ -41,7 +42,7 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ entry, onDelete }) => 
     }
   };
 
-  const displayPrimaryTitle = entry.primaryTitle || `Transformation from ${formattedTimestamp}`;
+  const displayPrimaryTitle = entry.primaryTitle || `Translation from ${formattedTimestamp}`;
 
   return (
     <article className="p-5 bg-white shadow-lg rounded-lg border border-indigo-200">
@@ -122,8 +123,19 @@ export const HistoryItem: React.FC<HistoryItemProps> = ({ entry, onDelete }) => 
 
           {entry.translationContext && (
             <div className="p-3 bg-orange-50 rounded-md border border-orange-200">
-              <h4 className="font-semibold text-orange-800 mb-2 text-sm">Translation Context Used:</h4>
-              <p className="text-xs text-gray-700 whitespace-pre-wrap">{entry.translationContext}</p>
+               <div className="flex justify-between items-center mb-1">
+                <h4 className="font-semibold text-orange-800 text-sm">Translation Context Used:</h4>
+                <button
+                  onClick={() => handleCopy(entry.translationContext || '', setContextCopyText, 'Copy Context')}
+                  className="px-3 py-1 bg-orange-100 text-orange-700 rounded-md hover:bg-orange-200 focus:outline-none focus:ring-1 focus:ring-orange-300 text-xs"
+                  aria-label="Copy translation context to clipboard"
+                >
+                  {contextCopyText}
+                </button>
+              </div>
+              <div className="max-h-16 overflow-y-auto bg-white/50 p-2 rounded border border-orange-100 mt-1">
+                <p className="text-xs text-gray-700 whitespace-pre-wrap m-0">{entry.translationContext}</p>
+              </div>
             </div>
           )}
 

@@ -26,15 +26,14 @@ export const InputArea: React.FC<InputAreaProps> = ({
   onTitlesFetched
 }) => {
   const [copyButtonText, setCopyButtonText] = useState('Copy');
-  const [copyFetchedTitleButtonText, setCopyFetchedTitleButtonText] = useState('Copy');
   const [internalUrlInput, setInternalUrlInput] = useState<string>(urlInputValue);
   const [isFetchingUrl, setIsFetchingUrl] = useState(false); // Local state for URL fetching initiated by this component
   const [fetchUrlError, setFetchUrlError] = useState<string | null>(null);
   
   const [contentContainerId, setContentContainerId] = useState<string>(DEFAULT_CONTENT_CONTAINER_ID);
   
-  // Local state for title, reported up via onTitlesFetched
-  const [localFetchedPrimaryTitle, setLocalFetchedPrimaryTitle] = useState<string | null>(null);
+  // State for the primary title (either fetched or manually entered), reported up via onTitlesFetched
+  const [primaryTitle, setPrimaryTitle] = useState<string | null>(null);
   const [titleFetchStatusMessage, setTitleFetchStatusMessage] = useState<string | null>(null);
 
   const [isFetchUrlAdvancedOptionsOpen, setIsFetchUrlAdvancedOptionsOpen] = useState<boolean>(false);
@@ -48,6 +47,12 @@ export const InputArea: React.FC<InputAreaProps> = ({
     const newUrl = e.target.value;
     setInternalUrlInput(newUrl);
     onUrlInputChange(newUrl); // Update App.tsx state
+  };
+
+  const handlePrimaryTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTitle = e.target.value;
+    setPrimaryTitle(newTitle);
+    onTitlesFetched(newTitle); // Update parent immediately
   };
 
   const handleCopy = async (textToCopy: string, setButtonText: React.Dispatch<React.SetStateAction<string>>, originalText: string) => {
@@ -78,7 +83,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
     setIsFetchingUrl(true);
     setFetchUrlError(null);
     setInputText(''); 
-    setLocalFetchedPrimaryTitle(null); 
+    setPrimaryTitle(null); 
     onTitlesFetched(null); // Clear titles in App.tsx
     setTitleFetchStatusMessage(null);
 
@@ -104,7 +109,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
       const primaryTitleText = titleElement?.textContent?.trim() || null;
 
       if (primaryTitleText) {
-          setLocalFetchedPrimaryTitle(primaryTitleText);
+          setPrimaryTitle(primaryTitleText);
           setTitleFetchStatusMessage(`Fetched title: "${primaryTitleText}".`);
       } else {
           setTitleFetchStatusMessage(`No <h1> title found inside element with ID '${contentIdToUse}'.`);
@@ -254,7 +259,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
           <p className="text-sm text-pink-500 mt-2" aria-live="polite">Attempting to load content from URL...</p>
         )}
         {titleFetchStatusMessage && !isFetchingUrl && (
-          <p className={`text-sm mt-2 ${localFetchedPrimaryTitle ? 'text-green-600' : 'text-orange-500'}`} aria-live="polite" role="status">
+          <p className={`text-sm mt-2 ${primaryTitle ? 'text-green-600' : 'text-orange-500'}`} aria-live="polite" role="status">
             {titleFetchStatusMessage}
           </p>
         )}
@@ -263,28 +268,26 @@ export const InputArea: React.FC<InputAreaProps> = ({
         )}
       </div>
 
-      {localFetchedPrimaryTitle && !isFetchingUrl && (
-          <div className="mb-4 p-3 border border-purple-200 bg-purple-50 rounded-md">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h3 className="text-sm font-semibold text-purple-700" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
-                        Tiêu đề gốc đã tìm thấy:
-                    </h3>
-                    <p className="text-lg text-gray-800" style={{ fontFamily: "'Times New Roman', Times, serif" }} lang="zh">
-                        {localFetchedPrimaryTitle}
-                    </p>
-                </div>
-                <button
-                    onClick={() => handleCopy(localFetchedPrimaryTitle, setCopyFetchedTitleButtonText, 'Copy')}
-                    className="px-4 py-1.5 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 text-sm disabled:opacity-50"
-                    disabled={combinedIsLoading}
-                    aria-label="Copy fetched title"
-                >
-                    {copyFetchedTitleButtonText}
-                </button>
-            </div>
-          </div>
-      )}
+      <div className="mb-4">
+        <label htmlFor="primary-title-input" className="block text-sm font-semibold text-purple-700 mb-1" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+          Tiêu đề (tùy chọn):
+        </label>
+        <p className="text-xs text-gray-500 mb-2" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+          Nhập hoặc dán tiêu đề gốc (tiếng Trung) vào đây để được dịch. Sẽ tự động được điền khi bạn lấy nội dung từ URL.
+        </p>
+        <input
+            type="text"
+            id="primary-title-input"
+            value={primaryTitle || ''}
+            onChange={handlePrimaryTitleChange}
+            placeholder="Ví dụ: 第一章：初遇"
+            className="w-full p-2 border border-purple-300 rounded-md focus:ring-2 focus:ring-purple-400 focus:border-purple-400 placeholder-gray-400 text-gray-700 bg-purple-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            disabled={combinedIsLoading}
+            lang="zh"
+            aria-label="Original Chinese title input (optional)"
+            style={{ fontFamily: "'Times New Roman', Times, serif" }}
+        />
+      </div>
 
       <textarea
         value={inputText}
@@ -316,7 +319,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
           <button
             onClick={() => {
                 setInputText('');
-                setLocalFetchedPrimaryTitle(null); 
+                setPrimaryTitle(null); 
                 onTitlesFetched(null); // Clear titles in App
                 setTitleFetchStatusMessage(null); 
                 setFetchUrlError(null); 
@@ -332,10 +335,10 @@ export const InputArea: React.FC<InputAreaProps> = ({
             onClick={onTransform} // Call onTransform directly, App.tsx handles passing titles
             className="px-8 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={combinedIsLoading || !inputText.trim()} // Use combined loading state
-            aria-label="Transform text"
+            aria-label="Translate text"
             style={{ fontFamily: "'Times New Roman', Times, serif" }}
           >
-            {isLoading ? 'Transforming...' : 'Transform'} 
+            {isLoading ? 'Translating...' : 'Translate'} 
           </button>
         </div>
       </div>

@@ -114,7 +114,7 @@ export const translateTitleViaGemini = async (
   chineseTitle: string,
 ): Promise<string> => {
 
-  const titlePrompt = `Bạn là một biên tập viên tài năng, chuyên dịch những tiêu đề chương lôi cuốn cho tiểu thuyết ngôn tình, Hãy dịch tiêu đề sách sau từ tiếng Trung sang tiếng Việt một cách tự nhiên và hấp dẫn. Chỉ trả về duy nhất chuỗi tiêu đề đã được dịch, không có bất kỳ văn bản nào khác.
+  const titlePrompt = `Hãy dịch tiêu đề sách sau từ tiếng Trung sang tiếng Việt một cách tự nhiên và hấp dẫn. Chỉ trả về duy nhất chuỗi tiêu đề đã được dịch, không có bất kỳ văn bản nào khác.
 
 Tiêu đề gốc (tiếng Trung): "${chineseTitle}"
 
@@ -152,6 +152,53 @@ Tiêu đề dịch (tiếng Việt):`;
     throw new Error(errorMessage);
   }
 };
+
+export const suggestChapterTitleViaGemini = async (
+  modelName: string,
+  promptTemplate: string,
+  narrativeText: string,
+  originalTitle?: string
+): Promise<string> => {
+  // Truncate narrative text to avoid overly large prompts for title generation
+  const truncatedNarrative = narrativeText.length > 2000 ? narrativeText.substring(0, 2000) + "..." : narrativeText;
+
+  const filledPrompt = promptTemplate
+    .replace('{{narrativeText}}', truncatedNarrative)
+    .replace('{{originalTitle}}', originalTitle || '(Không có)');
+
+  const modelConfig = {
+    temperature: 0.65, // Moderately creative for a good title
+  };
+
+  try {
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: modelName,
+      contents: filledPrompt,
+      config: modelConfig,
+    });
+
+    const text = response.text;
+    if (!text || text.trim() === "") {
+      throw new Error("Received an empty response from the AI for chapter title suggestion.");
+    }
+    // Remove potential quotes and markdown from the title
+    return text.trim().replace(/^["'*# ]+|["'*# ]+$/g, '');
+  } catch (error) {
+    console.error("Error calling Gemini API for chapter title suggestion:", error);
+    let errorMessage = "An unknown error occurred while communicating with the Gemini API for chapter title suggestion.";
+    if (error instanceof Error) {
+        errorMessage = error.message;
+        const anyError = error as any;
+        if (anyError.message && anyError.message.toLowerCase().includes("prompt_blocked")) {
+          errorMessage = "Gemini API Error: The chapter title suggestion prompt was blocked.";
+        } else {
+            errorMessage = `Gemini API Error (Chapter Title Suggestion): ${errorMessage}.`;
+        }
+    }
+    throw new Error(errorMessage);
+  }
+};
+
 
 export const updateContextViaGemini = async (
   modelName: string,

@@ -8,15 +8,17 @@ import { ModelConfigurator } from './components/ModelConfigurator';
 import { PromptEditor } from './components/PromptEditor';
 import { FetchNovelTocFeature } from './components/FetchNovelTocFeature';
 import { NovelTocModal } from './components/NovelTocModal';
-import { transformTextViaGemini, translateTitleViaGemini, updateContextViaGemini } from './services/geminiService';
+import { transformTextViaGemini, translateTitleViaGemini, updateContextViaGemini, suggestChapterTitleViaGemini } from './services/geminiService';
 import { extractTruyenWikiDichNetBookIndexUrl } from './services/urlExtractorService';
 import { TransformationEntry, NovelChapter } from './types';
 import { IndeterminateProgressBar } from './components/IndeterminateProgressBar';
 import { Modal } from './components/Modal';
+import { ChapterTitleFeature } from './components/ChapterTitleFeature';
 import { 
   DEFAULT_SYSTEM_INSTRUCTION, 
   DEFAULT_MODEL_ID, 
   AVAILABLE_TEXT_MODELS,
+  DEFAULT_CHAPTER_TITLE_PROMPT_TEMPLATE
 } from './constants';
 
 import TemperatureInfo from './components/info/TemperatureInfo';
@@ -59,6 +61,20 @@ const ContextManager: React.FC<ContextManagerProps> = ({
   isUpdatingContext,
 }) => {
   const isFeatureDisabled = !isContextEnabled || isLoading;
+  const [copyButtonText, setCopyButtonText] = React.useState('Copy');
+
+  const handleCopy = async () => {
+    if (!translationContext) return;
+    try {
+      await navigator.clipboard.writeText(translationContext);
+      setCopyButtonText('Copied!');
+      setTimeout(() => setCopyButtonText('Copy'), 1500);
+    } catch (err) {
+      console.error('Failed to copy context: ', err);
+      setCopyButtonText('Failed!');
+      setTimeout(() => setCopyButtonText('Copy'), 1500);
+    }
+  };
 
   return (
     <div className="w-full p-6 bg-white shadow-xl rounded-lg border border-orange-300">
@@ -107,14 +123,25 @@ const ContextManager: React.FC<ContextManagerProps> = ({
              <span>Contributions to context: <strong>{contextChainLength}</strong></span>
           )}
         </div>
-        <button
-          onClick={onClearContext}
-          disabled={isFeatureDisabled || !translationContext}
-          className="px-4 py-1.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          style={{ fontFamily: "'Times New Roman', Times, serif" }}
-        >
-          Clear Context
-        </button>
+        <div className="flex items-center space-x-2">
+           <button
+             onClick={handleCopy}
+             disabled={isFeatureDisabled || !translationContext}
+             className="px-4 py-1.5 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+             style={{ fontFamily: "'Times New Roman', Times, serif" }}
+             aria-label="Copy translation context"
+           >
+             {copyButtonText}
+           </button>
+          <button
+            onClick={onClearContext}
+            disabled={isFeatureDisabled || !translationContext}
+            className="px-4 py-1.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            style={{ fontFamily: "'Times New Roman', Times, serif" }}
+          >
+            Clear Context
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -145,6 +172,11 @@ const App: React.FC = () => {
   const [translationContext, setTranslationContext] = useState<string>('');
   const [contextChainLength, setContextChainLength] = useState<number>(0);
   const [isUpdatingContext, setIsUpdatingContext] = useState<boolean>(false);
+
+  // AI Chapter Title Suggestion State
+  const [isChapterTitleSuggestionEnabled, setIsChapterTitleSuggestionEnabled] = useState<boolean>(false);
+  const [chapterTitlePrompt, setChapterTitlePrompt] = useState<string>(DEFAULT_CHAPTER_TITLE_PROMPT_TEMPLATE);
+
 
   // Modal State for Info
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
@@ -249,17 +281,31 @@ const App: React.FC = () => {
       const durationMs = endTime - startTime;
       setLastTransformationDuration(durationMs);
       setOutputText(transformedTextResult);
-
-      if (primaryTitle && primaryTitle.trim() !== '') {
+      
+      if (isChapterTitleSuggestionEnabled && transformedTextResult) {
+        try {
+          finalTranslatedTitle = await suggestChapterTitleViaGemini(
+            selectedModel,
+            chapterTitlePrompt,
+            transformedTextResult,
+            primaryTitle
+          );
+        } catch (suggestionError) {
+          console.error('Chapter title suggestion error:', suggestionError);
+          setError('Could not suggest a chapter title, but the main text was transformed.');
+          finalTranslatedTitle = undefined;
+        }
+      } else if (primaryTitle && primaryTitle.trim() !== '') {
         try {
           finalTranslatedTitle = await translateTitleViaGemini(selectedModel, primaryTitle);
-          setTranslatedTitle(finalTranslatedTitle);
         } catch (titleError) {
            console.error('Title translation error:', titleError);
            setError('Could not translate the chapter title, but the main text was transformed.');
            finalTranslatedTitle = undefined;
         }
       }
+
+      setTranslatedTitle(finalTranslatedTitle ?? null);
       
       const newEntry: TransformationEntry = {
         id: Date.now().toString(),
@@ -301,14 +347,14 @@ const App: React.FC = () => {
 
     } catch (err) {
       console.error('Transformation error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during transformation.';
-      setError(`Failed to transform text: ${errorMessage}`);
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during translation.';
+      setError(`Failed to translate text: ${errorMessage}`);
       setOutputText(''); 
       setTranslatedTitle(null);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedModel, systemInstruction, inputText, temperature, topP, topK, seed, isContextEnabled, translationContext]);
+  }, [selectedModel, systemInstruction, inputText, temperature, topP, topK, seed, isContextEnabled, translationContext, isChapterTitleSuggestionEnabled, chapterTitlePrompt]);
 
   const handleDeleteHistoryItem = useCallback((id: string) => {
     setHistory(prevHistory => prevHistory.filter(entry => entry.id !== id));
@@ -489,6 +535,13 @@ const App: React.FC = () => {
                   isLoading={combinedIsLoading}
                   onOpenInfoModal={handleOpenInfoModal}
                 />
+                <ChapterTitleFeature
+                  isEnabled={isChapterTitleSuggestionEnabled}
+                  setIsEnabled={setIsChapterTitleSuggestionEnabled}
+                  chapterTitlePrompt={chapterTitlePrompt}
+                  setChapterTitlePrompt={setChapterTitlePrompt}
+                  isLoading={combinedIsLoading}
+                />
               </div>
             )}
           </section>
@@ -572,7 +625,7 @@ const App: React.FC = () => {
           {isLoading && (
             <div className="w-full my-6 flex flex-col items-center" aria-live="polite">
               <p className="text-pink-600 mb-2 text-lg" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
-                Transforming your narrative...
+                Translating your narrative...
               </p>
               <IndeterminateProgressBar />
             </div>
@@ -598,21 +651,6 @@ const App: React.FC = () => {
         </main>
         <footer className="w-full max-w-4xl text-center py-8 mt-auto text-sm text-gray-500" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
           <p>Powered by Gemini API</p>
-          <p className="mt-2 flex items-center justify-center text-lg">
-            Base on ideas of&nbsp;
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 24 24" 
-              fill="currentColor" 
-              className="w-5 h-5 mr-1 inline-block text-pink-500"
-              aria-hidden="true"
-            >
-              <path fillRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clipRule="evenodd" />
-            </svg>
-            <span className="text-pink-600 hover:text-pink-700 hover:underline cursor-default">
-              <strong>Edit vì đam mê</strong>
-            </span>
-          </p>
         </footer>
       </div>
       <Modal

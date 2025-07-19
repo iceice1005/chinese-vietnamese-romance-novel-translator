@@ -50,7 +50,7 @@ export const OutputArea: React.FC<OutputAreaProps> = ({ transformedText, duratio
       </div>
       {durationMs !== null && typeof durationMs === 'number' && (
         <p className="text-xs text-gray-500 mb-1" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
-          Transformation completed in {(durationMs / 1000).toFixed(2)} seconds.
+          Translation completed in {(durationMs / 1000).toFixed(2)} seconds.
         </p>
       )}
       <div className="text-xs text-gray-500 mb-3" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
