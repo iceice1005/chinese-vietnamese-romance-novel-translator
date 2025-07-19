@@ -13,9 +13,10 @@ Sử dụng từ vựng tiếng Việt phong phú, các phép ẩn dụ và so s
 Đảm bảo đầu ra là tiếng Việt tự nhiên, không phải là một bản dịch máy cứng nhắc.
 Đầu ra CHỈ nên là câu chuyện tiếng Việt đã được dịch, không có bất kỳ cụm từ giới thiệu hay kết luận nào từ bạn.`;
 
-export const DEFAULT_CHAPTER_TITLE_PROMPT_TEMPLATE = `Nhiệm vụ của bạn là dịch "Tiêu đề gốc" sang tiếng Việt một cách sát nghĩa với văn phong ngôn tình lãng mạn mượt mà. Hãy sử dụng "Nội dung chương" đã được dịch như một tài liệu tham khảo cho ngữ cảnh để bám sát ý nghĩa của những từ xuất hiện trong "Tiêu đề gốc".
+export const DEFAULT_CHAPTER_TITLE_PROMPT_TEMPLATE = `Nhiệm vụ của bạn là dịch "Tiêu đề gốc" sang tiếng Việt một cách sát nghĩa với văn phong ngôn tình lãng mạn mượt mà. Hãy sử dụng "Nội dung chương" đã được dịch như một ngữ cảnh tham khảo cho ý nghĩa câu từ xuất hiện trong "Tiêu đề gốc". Không được thay thế hoàn toàn nội dung của "Tiêu đề gốc".
 CHỈ trả về duy nhất chuỗi tiêu đề đã được tạo, bao gồm số chương và nội dung, không có bất kỳ văn bản nào khác.
 KHÔNG được tự ý loại bỏ tên riêng của người hoặc địa danh có trong "Tiêu đề gốc".
+CHỈ in hoa chữ cái đầu tiên của tiêu đề.
 ---
 **Tiêu đề gốc (tiếng Trung):**
 {{originalTitle}}
