@@ -114,7 +114,7 @@ export const translateTitleViaGemini = async (
   chineseTitle: string,
 ): Promise<string> => {
 
-  const titlePrompt = `Hãy dịch tiêu đề sách sau từ tiếng Trung sang tiếng Việt một cách tự nhiên và hấp dẫn. Chỉ trả về duy nhất chuỗi tiêu đề đã được dịch, không có bất kỳ văn bản nào khác.
+  const titlePrompt = `Bạn là một biên tập viên tài năng, chuyên dịch những tiêu đề chương lôi cuốn cho tiểu thuyết ngôn tình, Hãy dịch tiêu đề sách sau từ tiếng Trung sang tiếng Việt một cách tự nhiên và hấp dẫn. Chỉ trả về duy nhất chuỗi tiêu đề đã được dịch, không có bất kỳ văn bản nào khác.
 
 Tiêu đề gốc (tiếng Trung): "${chineseTitle}"
 
