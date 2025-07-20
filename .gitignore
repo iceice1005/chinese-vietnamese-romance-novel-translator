@@ -23,3 +23,4 @@ dist-ssr
 *.sln
 *.sw?
 .env.local
+/context_config_customization/*.txt
