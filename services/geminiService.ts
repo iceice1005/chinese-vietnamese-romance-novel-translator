@@ -60,8 +60,8 @@ export const transformTextViaGemini = async (
   };
   
   let contextInstruction = '';
-  if (translationContext && translationContext.trim() !== '') {
-    contextInstruction = `Dưới đây là một số hướng dẫn về ngữ cảnh và thuật ngữ từ các chương trước. Hãy tuân thủ chặt chẽ các hướng dẫn này để đảm bảo tính nhất quán:\n<context>\n${translationContext}\n</context>\n\n`;
+   if (translationContext && translationContext.trim() !== '') {
+    contextInstruction = `Dưới đây là một số hướng dẫn về ngữ cảnh, thuật ngữ và cách xưng hô từ các chương trước. Hãy tuân thủ TUYỆT ĐỐI các hướng dẫn này để đảm bảo tính nhất quán, đặc biệt là cách xưng hô giữa các nhân vật đã được thiết lập.\n<context>\n${translationContext}\n</context>\n\n`;
   }
 
   const fullPrompt = `${contextInstruction}${systemInstruction}
@@ -112,9 +112,15 @@ ${inputText}
 export const translateTitleViaGemini = async (
   modelName: string,
   chineseTitle: string,
+  translationContext?: string
 ): Promise<string> => {
 
-  const titlePrompt = `Hãy dịch tiêu đề sách sau từ tiếng Trung sang tiếng Việt một cách tự nhiên và hấp dẫn. Chỉ trả về duy nhất chuỗi tiêu đề đã được dịch, không có bất kỳ văn bản nào khác.
+  let contextInstruction = '';
+  if (translationContext && translationContext.trim() !== '') {
+    contextInstruction = `Dưới đây là một số hướng dẫn về ngữ cảnh, thuật ngữ và cách xưng hô từ các chương trước. Hãy sử dụng những thông tin này để dịch tiêu đề một cách chính xác và nhất quán.\n<context>\n${translationContext}\n</context>\n\n`;
+  }
+
+  const titlePrompt = `${contextInstruction}Hãy dịch tiêu đề sách sau từ tiếng Trung sang tiếng Việt một cách tự nhiên và hấp dẫn. Chỉ trả về duy nhất chuỗi tiêu đề đã được dịch, không có bất kỳ văn bản nào khác.
 
 Tiêu đề gốc (tiếng Trung): "${chineseTitle}"
 
@@ -157,12 +163,22 @@ export const suggestChapterTitleViaGemini = async (
   modelName: string,
   promptTemplate: string,
   narrativeText: string,
-  originalTitle?: string
+  originalTitle?: string,
+  translationContext?: string
 ): Promise<string> => {
   // Truncate narrative text to avoid overly large prompts for title generation
   const truncatedNarrative = narrativeText.length > 2000 ? narrativeText.substring(0, 2000) + "..." : narrativeText;
 
+  let contextBlock = '';
+  if (translationContext && translationContext.trim() !== '') {
+    contextBlock = `---
+**Bối cảnh dịch (để tham khảo):**
+${translationContext}
+`;
+  }
+
   const filledPrompt = promptTemplate
+    .replace('{{context}}', contextBlock)
     .replace('{{narrativeText}}', truncatedNarrative)
     .replace('{{originalTitle}}', originalTitle || '(Không có)');
 
@@ -206,51 +222,59 @@ export const updateContextViaGemini = async (
   chineseText: string,
   vietnameseTranslation: string
 ): Promise<string> => {
-  const prompt = `Bạn là một trợ lý phân tích, có nhiệm vụ duy trì một danh sách thuật ngữ nhất quán cho dịch giả.
+  const prompt = `Bạn là một chuyên gia dịch thuật tiểu thuyết ngôn tình cổ đại Trung Quốc. Hãy cập nhật bối cảnh dịch theo các quy tắc sau:
 Dựa trên "Bối cảnh hiện tại", "Văn bản gốc mới" và "Bản dịch mới", hãy tạo ra một "Bối cảnh cập nhật".
 
-QUY TẮC:
-1. "Bối cảnh cập nhật" phải là một danh sách các thuật ngữ quan trọng (tên riêng, địa danh, xưng hô, cụm từ đặc biệt) và cách dịch nhất quán của chúng.
-2. Kết hợp thông tin từ bối cảnh cũ và bổ sung các thuật ngữ mới từ văn bản mới. Nếu có mâu thuẫn, ưu tiên cách dịch trong "Bản dịch mới".
-3. Giữ cho bối cảnh ngắn gọn, ở dạng "Thuật ngữ gốc -> Bản dịch".
-4. Nếu "Bối cảnh hiện tại" trống, hãy tạo một bối cảnh mới từ đầu.
-5. CHỈ trả về nội dung của "Bối cảnh cập nhật", không có bất kỳ lời giải thích hay tiêu đề nào.
+**QUY TẮC CỐT LÕI**:
+1. **Xử lý bối cảnh trống**:
+   - Nếu "Bối cảnh hiện tại" trống, phân tích toàn bộ "Văn bản gốc mới" và "Bản dịch mới" để tạo ngữ cảnh mới.
+   - Ưu tiên trích xuất theo thứ tự: 
+     1) Tên nhân vật (kèm giới tính/vai trò nếu có) 
+     2) Địa danh/tông môn 
+     3) Xưng hô đặc biệt 
+     4) Thuật ngữ tu luyện/pháp bảo 
+     5) Thành ngữ/điển tích.
+
+2. **Nhất quán**:
+   - Giữ nguyên cách dịch đã có trong "Bối cảnh hiện tại".
+   - Chỉ thay đổi nếu bản dịch mới rõ ràng tốt hơn.
+
+3. **Bổ sung thông minh**:
+   - Đánh dấu các cụm từ đặc biệt bằng "!" (VD: "!凤凰涅槃 -> Phượng hoàng tái sinh (điển tích)").
+   - Thêm ghi chú quan hệ: "[A] là [cha/đồ đệ/vợ] của [B]".
+
+**FORMAT CHUẨN**:
+\`{original} -> {translation} | {type} | {notes}\`
+
+**DỮ LIỆU ĐẦU VÀO**:
+---
+[Bối cảnh hiện tại]
+${existingContext || 'Chưa có dữ liệu'}
 
 ---
-**Bối cảnh hiện tại:**
-${existingContext || '(trống)'}
-
----
-**Văn bản gốc mới (tiếng Trung):**
+[Văn bản gốc mới]
 ${chineseText}
 
 ---
-**Bản dịch mới (tiếng Việt):**
+[Bản dịch mới]
 ${vietnameseTranslation}
 
 ---
-**Bối cảnh cập nhật:**
+[Bối cảnh cập nhật] (CHỈ trả về nội dung dưới đây):
 `;
-  
+
   try {
     const response = await ai.models.generateContent({
       model: modelName,
       contents: prompt,
-      config: { temperature: 0.1 } // Low temp for factual, consistent output
-    });
-    const text = response.text;
-     if (text === null || text === undefined) {
-      throw new Error("Received a null or undefined response from the AI for context update.");
-    }
-    return text.trim();
-  } catch(error) {
-     console.error("Error calling Gemini API for context update:", error);
-     let errorMessage = "An unknown error occurred while updating context.";
-      if (error instanceof Error) {
-        errorMessage = `Gemini API Error (Context Update): ${error.message}.`;
+      config: { 
+        temperature: 0.2,  // Tăng nhẹ khi tạo mới, giảm khi cập nhật
+        topP: 0.9
       }
-      // Don't throw, just return existing context to not break the flow
-      console.error(errorMessage);
-      return existingContext; // Return old context on failure
+    });
+    return response.text?.trim() || existingContext;
+  } catch(error) {
+    console.error("Lỗi cập nhật ngữ cảnh:", error);
+    return existingContext;
   }
 };

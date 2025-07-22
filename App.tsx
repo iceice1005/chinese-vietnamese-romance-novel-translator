@@ -288,7 +288,8 @@ const App: React.FC = () => {
             selectedModel,
             chapterTitlePrompt,
             transformedTextResult,
-            primaryTitle
+            primaryTitle,
+            contextForThisRun
           );
         } catch (suggestionError) {
           console.error('Chapter title suggestion error:', suggestionError);
@@ -297,7 +298,7 @@ const App: React.FC = () => {
         }
       } else if (primaryTitle && primaryTitle.trim() !== '') {
         try {
-          finalTranslatedTitle = await translateTitleViaGemini(selectedModel, primaryTitle);
+          finalTranslatedTitle = await translateTitleViaGemini(selectedModel, primaryTitle, contextForThisRun);
         } catch (titleError) {
            console.error('Title translation error:', titleError);
            setError('Could not translate the chapter title, but the main text was transformed.');
